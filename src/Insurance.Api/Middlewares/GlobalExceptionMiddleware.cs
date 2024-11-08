@@ -1,94 +1,81 @@
+using Insurance.Api.Consts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 
 namespace Insurance.Api.Middlewares
 {
     /// <summary>
-    /// Middleware to handle global exceptions for the application.
+    /// Middleware to handle global exceptions by mapping exceptions to HTTP status codes and messages.
     /// </summary>
-    public class GlobalExceptionMiddleware
+    public class GlobalExceptionHandler
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<GlobalExceptionMiddleware> _logger;
+        private readonly ILogger<GlobalExceptionHandler> _logger;
+        private readonly Dictionary<Type, (HttpStatusCode StatusCode, string Message)> _exceptionMappings;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="GlobalExceptionMiddleware"/> class.
-        /// </summary>
-        /// <param name="next">The next middleware in the request pipeline.</param>
-        /// <param name="logger">The logger instance used for logging exceptions.</param>
-        public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
+        public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
         {
-            _next = next;
             _logger = logger;
+            _exceptionMappings = InitializeExceptionMappings();
         }
 
         /// <summary>
-        /// Invokes the middleware to handle requests and catch any unhandled exceptions.
+        /// Initializes exception mappings for different exception types.
         /// </summary>
-        /// <param name="context">The HTTP context for the current request.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task InvokeAsync(HttpContext context)
+        /// <returns>Dictionary mapping exception types to status codes and messages.</returns>
+        private static Dictionary<Type, (HttpStatusCode, string)> InitializeExceptionMappings()
         {
-            try
+            var mappings = new Dictionary<Type, (HttpStatusCode, string)>
             {
-                await _next(context);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An unexpected error occurred.");
-                await HandleExceptionAsync(context, ex);
-            }
+                { typeof(InvalidOperationException), (HttpStatusCode.BadRequest, ApiConstants.ExceptionMessages.InvalidOperation) },
+                { typeof(ArgumentNullException), (HttpStatusCode.BadRequest, ApiConstants.ExceptionMessages.NullParameter) },
+                { typeof(UnauthorizedAccessException), (HttpStatusCode.Unauthorized, ApiConstants.ExceptionMessages.AccessDenied) },
+                { typeof(NotSupportedException), (HttpStatusCode.NotImplemented, ApiConstants.ExceptionMessages.NotSupported) },
+                { typeof(KeyNotFoundException), (HttpStatusCode.NotFound, ApiConstants.ExceptionMessages.ResourceNotFound) },
+                { typeof(TimeoutException), (HttpStatusCode.RequestTimeout, ApiConstants.ExceptionMessages.Timeout) },
+                { typeof(ApplicationException), (HttpStatusCode.BadRequest, ApiConstants.ExceptionMessages.BadRequest) },
+                { typeof(NotImplementedException), (HttpStatusCode.NotImplemented, ApiConstants.ExceptionMessages.NotImplemented) }
+            };
+
+            // Adding SqlException mapping for different namespaces
+            mappings.Add(Type.GetType("System.Data.SqlClient.SqlException"), (HttpStatusCode.ServiceUnavailable, ApiConstants.ExceptionMessages.DatabaseError));
+            mappings.Add(Type.GetType("Microsoft.Data.SqlClient.SqlException"), (HttpStatusCode.ServiceUnavailable, ApiConstants.ExceptionMessages.DatabaseError));
+
+            return mappings;
         }
 
         /// <summary>
-        /// Handles exceptions by setting the appropriate status code and response message.
+        /// Processes exceptions and sets the appropriate status code and response message.
         /// </summary>
         /// <param name="context">The HTTP context for the current request.</param>
         /// <param name="exception">The exception that was thrown.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        private Task HandleExceptionAsync(HttpContext context, Exception exception)
+        public async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            var statusCode = (int)HttpStatusCode.InternalServerError; // Default to 500 if unexpected
-            var result = new { message = "An unexpected error occurred. Please try again later." };
+            var (statusCode, message) = GetStatusCodeAndMessageForException(exception);
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)statusCode;
 
-            switch (exception)
+            await context.Response.WriteAsJsonAsync(new { message });
+        }
+
+        /// <summary>
+        /// Gets the appropriate HTTP status code and message for a given exception.
+        /// </summary>
+        /// <param name="exception">The exception that occurred.</param>
+        /// <returns>Tuple containing the status code and message.</returns>
+        private (HttpStatusCode StatusCode, string Message) GetStatusCodeAndMessageForException(Exception exception)
+        {
+            if (_exceptionMappings.TryGetValue(exception.GetType(), out var mapping))
             {
-                case InvalidOperationException:
-                    statusCode = (int)HttpStatusCode.BadRequest;
-                    result = new { message = "Invalid operation." };
-                    break;
-                case ArgumentNullException:
-                    statusCode = (int)HttpStatusCode.BadRequest;
-                    result = new { message = "A required parameter was null." };
-                    break;
-                case UnauthorizedAccessException:
-                    statusCode = (int)HttpStatusCode.Unauthorized;
-                    result = new { message = "Access denied." };
-                    break;
-                case NotSupportedException:
-                    statusCode = (int)HttpStatusCode.NotImplemented;
-                    result = new { message = "The requested operation is not supported." };
-                    break;
-                case KeyNotFoundException:
-                    statusCode = (int)HttpStatusCode.NotFound;
-                    result = new { message = "The specified resource was not found." };
-                    break;
-                case TimeoutException:
-                    statusCode = (int)HttpStatusCode.RequestTimeout;
-                    result = new { message = "The request timed out. Please try again." };
-                    break;
-                default:
-                    // Log the unexpected exception with the generic message
-                    _logger.LogError(exception, "Unhandled exception.");
-                    break;
+                return mapping;
             }
 
-            context.Response.ContentType = "application/json";
-            context.Response.StatusCode = statusCode;
-            return context.Response.WriteAsJsonAsync(result);
+            _logger.LogError(exception, "Unhandled exception.");
+            return (HttpStatusCode.InternalServerError, ApiConstants.ExceptionMessages.DefaultErrorMessage);
         }
     }
 }

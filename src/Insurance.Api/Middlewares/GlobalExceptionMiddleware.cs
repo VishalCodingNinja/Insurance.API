@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
@@ -54,11 +54,36 @@ namespace Insurance.Api.Middlewares
             var statusCode = (int)HttpStatusCode.InternalServerError; // Default to 500 if unexpected
             var result = new { message = "An unexpected error occurred. Please try again later." };
 
-
-            if (exception is InvalidOperationException)
+            switch (exception)
             {
-                statusCode = (int)HttpStatusCode.BadRequest;
-                result = new { message = "Invalid operation." };
+                case InvalidOperationException:
+                    statusCode = (int)HttpStatusCode.BadRequest;
+                    result = new { message = "Invalid operation." };
+                    break;
+                case ArgumentNullException:
+                    statusCode = (int)HttpStatusCode.BadRequest;
+                    result = new { message = "A required parameter was null." };
+                    break;
+                case UnauthorizedAccessException:
+                    statusCode = (int)HttpStatusCode.Unauthorized;
+                    result = new { message = "Access denied." };
+                    break;
+                case NotSupportedException:
+                    statusCode = (int)HttpStatusCode.NotImplemented;
+                    result = new { message = "The requested operation is not supported." };
+                    break;
+                case KeyNotFoundException:
+                    statusCode = (int)HttpStatusCode.NotFound;
+                    result = new { message = "The specified resource was not found." };
+                    break;
+                case TimeoutException:
+                    statusCode = (int)HttpStatusCode.RequestTimeout;
+                    result = new { message = "The request timed out. Please try again." };
+                    break;
+                default:
+                    // Log the unexpected exception with the generic message
+                    _logger.LogError(exception, "Unhandled exception.");
+                    break;
             }
 
             context.Response.ContentType = "application/json";

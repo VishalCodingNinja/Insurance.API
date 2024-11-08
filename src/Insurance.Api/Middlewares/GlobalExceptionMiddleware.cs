@@ -13,11 +13,18 @@ namespace Insurance.Api.Middlewares
     /// </summary>
     public class GlobalExceptionHandler
     {
+        private readonly RequestDelegate _next;
         private readonly ILogger<GlobalExceptionHandler> _logger;
         private readonly Dictionary<Type, (HttpStatusCode StatusCode, string Message)> _exceptionMappings;
 
-        public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GlobalExceptionHandler"/> class.
+        /// </summary>
+        /// <param name="next">The next middleware in the request pipeline.</param>
+        /// <param name="logger">The logger instance used for logging exceptions.</param>
+        public GlobalExceptionHandler(RequestDelegate next, ILogger<GlobalExceptionHandler> logger)
         {
+            _next = next;
             _logger = logger;
             _exceptionMappings = InitializeExceptionMappings();
         }
@@ -40,11 +47,28 @@ namespace Insurance.Api.Middlewares
                 { typeof(NotImplementedException), (HttpStatusCode.NotImplemented, ApiConstants.ExceptionMessages.NotImplemented) }
             };
 
-            // Adding SqlException mapping for different namespaces
+            // Adding SqlException mappings
             mappings.Add(Type.GetType("System.Data.SqlClient.SqlException"), (HttpStatusCode.ServiceUnavailable, ApiConstants.ExceptionMessages.DatabaseError));
             mappings.Add(Type.GetType("Microsoft.Data.SqlClient.SqlException"), (HttpStatusCode.ServiceUnavailable, ApiConstants.ExceptionMessages.DatabaseError));
 
             return mappings;
+        }
+
+        /// <summary>
+        /// Middleware invoke method to handle requests and exceptions.
+        /// </summary>
+        /// <param name="context">The HTTP context for the current request.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        public async Task InvokeAsync(HttpContext context)
+        {
+            try
+            {
+                await _next(context);
+            }
+            catch (Exception ex)
+            {
+                await HandleExceptionAsync(context, ex);
+            }
         }
 
         /// <summary>
@@ -53,7 +77,7 @@ namespace Insurance.Api.Middlewares
         /// <param name="context">The HTTP context for the current request.</param>
         /// <param name="exception">The exception that was thrown.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task HandleExceptionAsync(HttpContext context, Exception exception)
+        private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             var (statusCode, message) = GetStatusCodeAndMessageForException(exception);
             context.Response.ContentType = "application/json";

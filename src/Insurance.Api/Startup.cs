@@ -83,7 +83,7 @@ namespace Insurance.Api
             }
             else
             {
-                app.UseMiddleware<GlobalExceptionMiddleware>();
+                app.UseMiddleware<GlobalExceptionHandler>();
             }
 
             app.UseHttpsRedirection();

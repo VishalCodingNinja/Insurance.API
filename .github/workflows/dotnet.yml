@@ -20,7 +20,5 @@ jobs:
       run: dotnet restore
     - name: Build
       run: dotnet build --no-restore
-    - name: Test
-      run: |
-        find . -type f -name "*Integration*.cs" -exec echo "Excluding {}" \;
-        dotnet test --no-build --verbosity normal --exclude-by-file "**/*Integration*.cs"
+    - name: Run Unit Tests
+      run: dotnet test ./tests/Insurance.Tests/UnitTests --no-build --verbosity normal

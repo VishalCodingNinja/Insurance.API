@@ -25,4 +25,4 @@ jobs:
         echo "Excluding all Integration test files:"
         find ./tests/Insurance.Tests/IntegrationTests -type f -name "*.cs" -exec echo "Excluding {}" \;
         echo "Running tests from UnitTests folder only:"
-        dotnet test ./tests/Insurance.Tests/UnitTests --no-build --verbosity normal
+        dotnet test ./tests/Insurance.Tests/UnitTests/Insurance.Tests.UnitTests.csproj --no-build --verbosity normal

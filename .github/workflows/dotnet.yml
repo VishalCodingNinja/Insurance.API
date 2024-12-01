@@ -1,4 +1,4 @@
-name: .NET Insurance.API
+name: .NET
 
 on:
   push:
@@ -24,5 +24,5 @@ jobs:
       run: |
         echo "Excluding all Integration test files:"
         find ./tests/Insurance.Tests/IntegrationTests -type f -name "*.cs" -exec echo "Excluding {}" \;
-        echo "Running tests from UnitTests folder only:"
-        dotnet test ./tests/Insurance.Tests/UnitTests/Insurance.Tests.UnitTests.csproj --no-build --verbosity normal
+        echo "Running Unit Tests only:"
+        dotnet test ./tests/Insurance.Tests/Insurance.Tests.csproj --no-build --verbosity normal --filter "FullyQualifiedName!~Integration"

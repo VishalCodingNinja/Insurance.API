@@ -57,7 +57,6 @@ namespace Insurance.Api
                 c.EnableAnnotations();
             });
             services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
             services.AddAutoMapper(typeof(Program));
 
             services.AddScoped<ISurchargeRepository, SurchargeRepository>();
